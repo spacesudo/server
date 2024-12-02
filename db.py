@@ -176,6 +176,55 @@ class Orders(Products):
                        WHERE orders.orderid = ?"""
         args = (orderid,)
         return [x for x in self.conn.execute(statement, args)]
+    
+    
+class ProductDetails(Products):
+    def __init__(self, dbname="products.db"):
+        super().__init__(dbname)
+
+    def setup(self):
+        # Call parent setup to ensure products table is created
+        super().setup()
+        
+        # Create product_details table
+        statement = """CREATE TABLE IF NOT EXISTS product_details (
+                        id INTEGER PRIMARY KEY, 
+                        productid INTEGER UNIQUE, 
+                        hostname TEXT, 
+                        password TEXT,
+                        FOREIGN KEY (productid) REFERENCES products (productid))"""
+        self.conn.execute(statement)
+        self.conn.commit()
+
+    def add_product_details(self, productid, hostname, password):
+        statement = """INSERT OR IGNORE INTO product_details (productid, hostname, password) 
+                       VALUES (?, ?, ?)"""
+        args = (productid, hostname, password)
+        self.conn.execute(statement, args)
+        self.conn.commit()
+
+    def delete_product_details(self, productid):
+        statement = "DELETE FROM product_details WHERE productid = ?"
+        args = (productid,)
+        self.conn.execute(statement, args)
+        self.conn.commit()
+
+    def update_hostname(self, productid, hostname):
+        statement = "UPDATE product_details SET hostname = ? WHERE productid = ?"
+        args = (hostname, productid)
+        self.conn.execute(statement, args)
+        self.conn.commit()
+
+    def update_password(self, productid, password):
+        statement = "UPDATE product_details SET password = ? WHERE productid = ?"
+        args = (password, productid)
+        self.conn.execute(statement, args)
+        self.conn.commit()
+
+    def get_product_details(self, productid):
+        statement = "SELECT productid, hostname, password FROM product_details WHERE productid = ?"
+        args = (productid,)
+        return [x for x in self.conn.execute(statement, args)]
 
 # Usage example
 if __name__ == "__main__":
@@ -188,6 +237,9 @@ if __name__ == "__main__":
     orders_db.add_order(42, 1, "2024-07-31")  # Adding an order with default paid=False and ordername=None
 
     print("All Orders:")
+    details= ProductDetails()
+    details.setup()
+    details.add_product_details(1, '157.02.01.02', "gggggggggggggggggggg")
     print(orders_db.get_all_orders())
 
     print("\nUpdating Order:")
@@ -195,3 +247,5 @@ if __name__ == "__main__":
 
     print("\nAll Orders After Update:")
     print(orders_db.get_all_orders())
+    
+    print(details.get_product_details(1))

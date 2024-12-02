@@ -4,7 +4,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from telebot.util import antiflood, extract_arguments, quick_markup
 import os
 import requests
-from db import UsersData, Products, Orders
+from db import UsersData, Products, Orders, ProductDetails
 from datetime import datetime
 import re
 import json
@@ -17,7 +17,7 @@ print(api_key)
 
 now = datetime.now()
 
-ADMIN_ADDRESS = '0x8e6C37BA15fb4a4013Ef78554C40A7ed7EddF4c7'
+ADMIN_ADDRESS = '0x0f263d3fc1306780627b1d7b605fc872c653f80a'
 
 load_dotenv()
 
@@ -36,6 +36,8 @@ prod_db.setup()
 order_db = Orders()
 order_db.setup()
 
+details_db = ProductDetails()
+details_db.setup()
 
 def get_hash(link: str):
     pattern = r"(?<=tx\/)[\w\d]+"
@@ -135,7 +137,42 @@ def addproduct(message):
         bot.register_next_step_handler(message, set_product)
     else:
         bot.reply_to(message, "admin command")
+
+@bot.message_handler(commands=['send'])
+def send_details(message):
+    messager = message.chat.id
+    if str(messager) == "7034272819" or str(messager) == "6219754372":
+        s = bot.send_message(messager, "send userid, product id")
+        bot.register_next_step_handler(s, send_det) 
+    else:
+        bot.reply_to(message, "admin command")
         
+        
+def send_det(message):
+    owner = message.chat.id
+    msg = str(message.text).split(",")
+    userid = msg[0]
+    productid = msg[1]
+    details = details_db.get_product_details(productid)[0]
+    print(details)
+    host = details[1]
+    print(host)
+    password = details[2]
+    prod = prod_db.get_product(productid)[0]
+    print(prod)
+    msg = f"""Your Terra Server details are for Server *{prod[1]}* 
+    
+*Host-Name* : `{host}`
+
+*Password*: `{password}`
+
+ssh : `ssh root@{host}`
+    
+    """
+    photo = open('photo.jpg', 'rb')
+    bot.send_photo(userid, photo, msg)
+    bot.send_message(owner, "sent")
+
         
 def set_product(message):
     msg = str(message.text).split(",")
@@ -166,9 +203,33 @@ def allproduct(message):
         bot.send_message(message.chat.id, msg, reply_markup=markup)    
     else:
         bot.reply_to(message, "admin command")
-        
 
-# Dictionary to track the current product index for each user
+
+@bot.message_handler(commands=['details'])
+def add_prod(message):
+    owner = message.chat.id
+    messager = message.chat.id
+    if str(messager) == "7034272819" or str(messager) == "6219754372":
+        bot.send_message(messager, "Send Product details as follows\n`product-id, hostname, password`")
+        bot.register_next_step_handler(message, set_product_det)
+    else:
+        bot.reply_to(message, "admin command")
+
+
+def set_product_det(message):
+    owner = message.chat.id
+    msg = str(message.text).split(",")
+    pid = msg[0]
+    hostname = msg[1]
+    password = msg[2]
+    try:
+        details_db.add_product_details(pid, hostname, password)
+        bot.reply_to(message, "Added successfully")
+    except Exception as e:
+        bot.reply_to(message, e)
+        
+            
+
 user_product_index = {}
 
 @bot.message_handler(commands=['allproducts'])
@@ -187,7 +248,7 @@ def all_product(message):
 
         # Display the first product
         product = products_[current_index]
-        msg = f"*All Product*\n\n`{product[0]}` \n\n *{product[1]}, ${product[2]}, {product[3]}, {product[4]}, type: {product[5]}*\n\n"
+        msg = f"*All Product*\n\nServer-ID: `{product[0]}` \n\n*{product[1]}, ${product[2]}, {product[3]}, {product[4]}, type: {product[5]}*\n\n"
         
         # Define inline keyboard markup
         markup = quick_markup({
@@ -202,6 +263,7 @@ def all_product(message):
         print(e)
         bot.send_message(message.chat.id, "An error occurred while fetching products.\nPlease try again later.")
 
+
 @bot.callback_query_handler(func=lambda call: call.data == 'nextall')
 def next_product(call):
     try:
@@ -214,7 +276,7 @@ def next_product(call):
         
         product = products_[current_index]
         print(product[0])
-        msg = f"*All Product*\n\n`{product[0]}` \n\n *{product[1]}, ${product[2]}, {product[3]}, {product[4]}, type: {product[5]}*\n\n"
+        msg = f"*All Product*\n\nServer-ID: `{product[0]}` \n\n*{product[1]}, ${product[2]}, {product[3]}, {product[4]}, type: {product[5]}*\n\n"
 
         markup = quick_markup({
             'Buy this Product': {'callback_data': 'proceed'},
@@ -247,20 +309,23 @@ def start(message):
     owner = message.chat.id
     user_db.add_user(owner)
     msg = """
-Welcome to *HostGenius VPS*!
+Welcome to *Terra Rental Bot*!
 
-Hello and welcome to HostGenius VPS, your ultimate solution for reliable, high-performance Virtual Private Servers (VPS). Our advanced VPS hosting services are designed to cater to all your hosting needs, whether you're a developer, a business owner, or just someone in need of robust and scalable server solutions.
+Hello and welcome to Terra Rental Bot, your ultimate solution for reliable, high-performance Virtual Private Servers (VPS). Our advanced VPS hosting services are designed to cater to all your hosting needs, whether you're a developer, a business owner, or just someone in need of robust and scalable server solutions.
 
-Our bot is here to assist you every step of the way. From selecting the perfect VPS plan to managing and optimizing your server, HostGenius VPS ensures a seamless and efficient experience.
+Our bot is here to assist you every step of the way. From selecting the perfect VPS plan to managing and optimizing your server, Terra Rental Bot ensures a seamless and efficient experience.
 
-Experience the power, speed, and flexibility of our VPS hosting. Let's get started and take your online presence to the next level with HostGenius VPS!   
+Experience the power, speed, and flexibility of our VPS hosting. Let's get started and take your online presence to the next level with Terra Rental Bot!   
     
     """
     markup = InlineKeyboardMarkup()
     btn = InlineKeyboardButton('Buy A Server', callback_data='buy')
     btn1 = InlineKeyboardButton('See all servers', callback_data='allservers')
-    markup.add(btn, btn1)
-    bot.send_message(owner, msg, reply_markup=markup)
+    btn2 = InlineKeyboardButton('Premium GPUs', callback_data='prem')
+    markup.add(btn, btn2)
+    photo = open('photo.jpg', 'rb')
+    bot.send_photo(owner, photo, msg, reply_markup=markup)
+    #bot.send_message(owner, msg, reply_markup=markup)
 
 @bot.message_handler(commands=['help'])
 def help(message):
@@ -274,7 +339,8 @@ def call_back(call):
     if call.data == 'deleteproduct':
         delproduct(call.message)
         
-        
+    elif call.data == 'prem':
+        bot.send_message(owner, "(Premium GPUs x4 (374GB VRAM combined) are being utilised by Algo Host Operation's testing. Select Gpu's from our Budget range")  
     elif call.data == 'allservers':
         all_product(call.message)
         
@@ -307,7 +373,7 @@ def call_back(call):
         y = len(order)-1
         name = order[y][1]
         price = order[y][2]
-        msg = f"""HostGenius VPS
+        msg = f"""Terra Rental Bot
         
 Select your preferred payment method for {name}
 
@@ -327,7 +393,7 @@ You are required to pay `${price}` to complete your order
         y = len(order)-1
         name = order[y][1]
         price = order[y][2]
-        msg = f"""HostGenius VPS
+        msg = f"""Terra Rental Bot
 
 Make a payment of $`{price}` to 
 
@@ -353,7 +419,7 @@ Payment Status: {'Unpaid' if order[y][4] == 0 else 'Paid'}
         y = len(order)-1
         name = order[y][1]
         price = order[y][2]
-        msg = f"""HostGenius VPS
+        msg = f"""Terra Rental Bot
 
 Make a payment of $`{price}` to 
 
@@ -384,7 +450,7 @@ Payment Status: {'Unpaid' if order[y][4] == 0 else 'Paid'}
         y = len(order)-1
         name = order[y][1]
         price = order[y][2]
-        msg = f"""HostGenius VPS
+        msg = f"""Terra Rental Bot
 
 Make a payment of $`{price}` to 
 
@@ -413,7 +479,7 @@ Payment Status: {'Unpaid' if order[y][4] == 0 else 'Paid'}
         y = len(order)-1
         name = order[y][1]
         price = order[y][2]
-        msg = f"""HostGenius VPS
+        msg = f"""Terra Rental Bot
 
 Make a payment of $`{price}` to 
 
@@ -445,7 +511,7 @@ def start_buy(message):
     except Exception as e:
         bot.send_message(owner, "Invalid server ID")
     print(server_details)
-    msg = f"""HostGenius VPS
+    msg = f"""Terra Rental Bot
     
     
 Server-ID: {server_details[0][0]}
@@ -468,7 +534,7 @@ Description: {server_details[0][4]}
     name = f'{id}-{owner}-{date}'
     order_db.add_order(owner, id, date, ordername=name)
     y = order_db.get_orders_by_user(owner)
-    bot.send_message("7034272819", f"NEW ORDER PLACED FOR {owner}\n\n{y}")
+    #bot.send_message("7034272819", f"NEW ORDER PLACED FOR {owner}\n\n{y}")
     
 def pay_verify(message):
     owner = message.chat.id
@@ -478,19 +544,23 @@ def pay_verify(message):
     price = order[y][2]
     tx_link = message.text
     tx_hash = get_hash(tx_link)
+    print(price)
     print(tx_hash)
+    bot.send_message(7034272819, f"New payment from {owner}\n\nPayment Link: {tx_link}\n\n {name}")
     print(func.parse_tx(tx_hash))
     from_addr, to_addr, value = func.parse_tx(tx_hash)
     print(func.parse_tx(tx_hash))
     value_ = get_chain_price('ethereum')
     value_usd = value*value_
+    print(value_usd)
     if to_addr == ADMIN_ADDRESS:
         if value_usd >= price:
             bot.send_message(7034272819, f"New payment from {owner}\n\nPayment Link: {tx_link}")
+            bot.send_message(owner, "Your payment is under review.\nYou wil receive your server logins once it's confirmed")
         else:
             bot.send_message(owner, "Payment not enough ")
     
     else:
-        bot.send_message(owner, "Error in payment")    
+        bot.send_message(owner, "Please make payment to specified address")    
       
 bot.infinity_polling()
